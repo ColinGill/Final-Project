@@ -27,15 +27,27 @@ Mag=Mag(1:fftSize/2); %omit redundant data from plot
 subplot(5,1,2);
 plot(Mag);
 
-w= (sin(pi*n/numOfSamples) -0.5 *sin(*pi*n/numOfSamples ));
+M = 1024;
+alpha = 0.01;
+%HANNPOISSON  - Length M Hann-Poisson window 
+Mo2 = (M-1)/2; n=(-Mo2:Mo2)';
+scl = alpha / Mo2;
+p = exp(-scl*abs(n));
+scl2 = pi / Mo2;
+h = 0.5*(1+cos(scl2*n));
+w = p.*h;
+w = 0.5*(1-cos
+subplot(5,1,3);
+plot(w);
+
+%w= (sin(pi*n/numOfSamples) - 0.3 *sin(3*pi*n/numOfSamples ) - 0.2 *sin(3*pi*n/numOfSamples ));
 
 %{
 for i=(numOfSamples/2):(numOfSamples-numOfSamples/2)
     w(i) = 1;
 end
 %}
-subplot(5,1,3);
-plot(w);
+
 
 for i=1:numOfSamples
     x(i) = x(i)*w(i);

@@ -27,15 +27,19 @@ Mag=Mag(1:fftSize/2); %omit redundant data from plot
 subplot(5,1,2);
 plot(Mag);
 
-w= (sin(pi*n/numOfSamples) - 0.3 *sin(3*pi*n/numOfSamples ) - 0.2 *sin(3*pi*n/numOfSamples ));
+
+w = 0.5*(1-cos(2*pi*n/1023));
+subplot(5,1,3);
+plot(w);
+
+%w= (sin(pi*n/numOfSamples) - 0.3 *sin(3*pi*n/numOfSamples ) - 0.2 *sin(3*pi*n/numOfSamples ));
 
 %{
 for i=(numOfSamples/2):(numOfSamples-numOfSamples/2)
     w(i) = 1;
 end
 %}
-subplot(5,1,3);
-plot(w);
+
 
 for i=1:numOfSamples
     x(i) = x(i)*w(i);

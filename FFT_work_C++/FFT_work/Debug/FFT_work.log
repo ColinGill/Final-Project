@@ -1,9 +1,0 @@
-﻿  FFTwork.cpp
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(53): warning C4244: '=': conversion from 'double' to 'real', possible loss of data
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(54): warning C4244: '=': conversion from 'double' to 'real', possible loss of data
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(72): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(86): warning C4244: '=': conversion from 'double' to 'real', possible loss of data
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(72): warning C4101: 'k': unreferenced local variable
-c:\users\donnacha\desktop\final-project\fft_work\fft_work\fftwork.cpp(71): warning C4101: 'v1': unreferenced local variable
-  FFT_work.vcxproj -> C:\Users\Donnacha\Desktop\Final-Project\FFT_work\Debug\FFT_work.exe
-  FFT_work.vcxproj -> C:\Users\Donnacha\Desktop\Final-Project\FFT_work\Debug\FFT_work.pdb (Partial PDB)
