@@ -29,10 +29,11 @@ plot(Mag);
 
 
 w = 0.5*(1-cos(2*pi*n/1023));
+%w= 0.5*(sin(pi*n/numOfSamples) + 0.8*(1 -cos(2*pi*n/numOfSamples ) ));
 subplot(5,1,3);
 plot(w);
 
-%w= (sin(pi*n/numOfSamples) - 0.3 *sin(3*pi*n/numOfSamples ) - 0.2 *sin(3*pi*n/numOfSamples ));
+
 
 %{
 for i=(numOfSamples/2):(numOfSamples-numOfSamples/2)
