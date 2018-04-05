@@ -1,67 +1,148 @@
 /*
-  ==============================================================================
+==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2017 - ROLI Ltd.
+This file was auto-generated!
 
-   JUCE is an open source library subject to commercial or open-source
-   licensing.
+It contains the basic framework code for a JUCE plugin editor.
 
-   By using JUCE, you agree to the terms of both the JUCE 5 End-User License
-   Agreement and JUCE 5 Privacy Policy (both updated and effective as of the
-   27th April 2017).
-
-   End User License Agreement: www.juce.com/juce-5-licence
-   Privacy Policy: www.juce.com/juce-5-privacy-policy
-
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
-
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
-
-  ==============================================================================
+==============================================================================
 */
 
 #pragma once
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "PluginProcessor.h"
+#include "MyTabbedComponent.h"
 
 
 //==============================================================================
-/** This is the editor component that our filter will display.
+/**
 */
-class JuceDemoPluginAudioProcessorEditor  : public AudioProcessorEditor,
-                                            private Timer
-{
-public:
-    JuceDemoPluginAudioProcessorEditor (JuceDemoPluginAudioProcessor&);
-    ~JuceDemoPluginAudioProcessorEditor();
 
-    //==============================================================================
-    void paint (Graphics&) override;
-    void resized() override;
-    void timerCallback() override;
-    void hostMIDIControllerIsAvailable (bool) override;
-    void updateTrackProperties();
-	void updateGui(String);
+
+
+class GuiWorkAudioProcessorEditor : public AudioProcessorEditor, private Button::Listener
+
+
+{
+
+public:
+	GuiWorkAudioProcessorEditor(GidiPluginAudioProcessor&);
+	~GuiWorkAudioProcessorEditor();
+
+	//==============================================================================
+	void paint(Graphics&) override;
+	void resized() override;
+	static const char* gidiBg_png;
+	static const int gidiBg_pngSize;
+	static const char* riffmode_png;
+	static const int riffmode_pngSize;
+
 
 private:
-    class ParameterSlider;
 
-    MidiKeyboardComponent midiKeyboard;
-    Label timecodeDisplayLabel, gainLabel, delayLabel;
-    ScopedPointer<ParameterSlider> gainSlider, delaySlider;
-    Colour backgroundColour;
+	
+	MyTabbedComponent tab;
+	GidiPluginAudioProcessor& processor;
+	ToggleButton enableDynamics;
+	Image cachedImage_gidiBg_png_1;
+	Image cachedImage_riffmode_png_1;
+	Font font;
 
-    //==============================================================================
-    JuceDemoPluginAudioProcessor& getProcessor() const
-    {
-        return static_cast<JuceDemoPluginAudioProcessor&> (processor);
-    }
+	void buttonClicked(Button * btnClicked) override;
 
-	void updateText(String text);
-	void updateTimecodeDisplay (AudioPlayHead::CurrentPositionInfo);
+	struct SliderHolder : public Component, private Slider::Listener
+	{
+
+		SliderHolder(GidiPluginAudioProcessor &p) : processingRef(p)
+		{
+			addAndMakeVisible(sensitivity);
+			addAndMakeVisible(dynamics);
+			addAndMakeVisible(slider1);
+			addAndMakeVisible(slider2);
+			slider1.setName("slider1");
+			slider2.setName("slider2");
+			slider1.addListener(this);
+			slider2.addListener(this);
+		}
+
+		void sliderValueChanged(Slider * slider) override;
+
+
+		void resized() override
+		{
+			slider1.setRange(0.0, 1.0, 0.01);
+			slider1.setValue(processingRef.getSensitivity());
+			slider1.setSize(100, 50);
+			slider1.setBounds(30, 40, 200, 40);
+
+			slider2.setRange(1.0, 10, 1);
+			slider2.setValue(processingRef.getDynamics());
+			slider2.setSize(100, 50);
+			slider2.setBounds(30, 120, 200, 40);
+
+			sensitivity.setText("SENSITIVITY", NotificationType::dontSendNotification);
+			sensitivity.setBounds(120, 20, 150, 32);
+
+			dynamics.setText("DYNAMICS", NotificationType::dontSendNotification);
+			dynamics.setBounds(120, 100, 150, 32);
+		}
+
+		Slider slider1, slider2;
+		Label sensitivity, dynamics;
+		GidiPluginAudioProcessor &processingRef;
+
+	};
+
+	struct LeadModeComponents : public Component, private Slider::Listener, private ToggleButton::Listener
+	{
+		
+		LeadModeComponents(GidiPluginAudioProcessor &p) : processingRef(p)
+		{
+			addAndMakeVisible(bendsBtn);
+			bendsBtn.setButtonText(TRANS("Enable Bends"));
+			addAndMakeVisible(sensitivity);
+			addAndMakeVisible(dynamics);
+			addAndMakeVisible(slider1);
+			addAndMakeVisible(slider2);
+			slider1.setName("sSlider");
+			slider2.setName("dSlider");
+			bendsBtn.addListener(this);
+			slider1.addListener(this);
+			slider2.addListener(this);
+		}
+
+		void sliderValueChanged(Slider * slider) override;
+		void buttonClicked(Button* buttonThatWasClicked) override;
+
+		void resized() override
+		{
+			slider1.setRange(0.0, 1.0, 0.01);
+			slider1.setValue(processingRef.getSensitivity());
+			slider1.setSize(100, 50);
+			slider1.setBounds(30, 40, 200, 40);
+
+			slider2.setRange(1.0, 10, 1);
+			slider2.setValue(processingRef.getDynamics());
+			slider2.setSize(100, 50);
+			slider2.setBounds(30, 120, 200, 40);
+
+			sensitivity.setText("SENSITIVITY", NotificationType::dontSendNotification);
+			sensitivity.setBounds(120, 20, 150, 32);
+
+			dynamics.setText("DYNAMICS", NotificationType::dontSendNotification);
+			dynamics.setBounds(120, 100, 150, 32);
+			
+			bendsBtn.setBounds(100, 180, 150, 32);
+		}
+
+		Slider slider1, slider2;
+		Label sensitivity, dynamics;
+		GidiPluginAudioProcessor &processingRef;
+		ToggleButton bendsBtn;
+
+	};
+
+
+
 };
