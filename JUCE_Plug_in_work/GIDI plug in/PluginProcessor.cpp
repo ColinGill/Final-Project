@@ -23,16 +23,19 @@
 
   ==============================================================================
 */
-
+#include <chrono>
+#include <ctime>
+#include <math.h>  
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "SinewaveSynth.h"
+
 
 AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
 
 //==============================================================================
-JuceDemoPluginAudioProcessor::JuceDemoPluginAudioProcessor()
+GidiPluginAudioProcessor::GidiPluginAudioProcessor()
     : AudioProcessor (getBusesProperties())
 {
     lastPosInfo.resetToDefault();
@@ -40,17 +43,18 @@ JuceDemoPluginAudioProcessor::JuceDemoPluginAudioProcessor()
     // This creates our parameters. We'll keep some raw pointers to them in this class,
     // so that we can easily access them later, but the base class will take care of
     // deleting them for us.
-    addParameter (gainParam  = new AudioParameterFloat ("Note",  "Note",           0.0f, 1.0f, 0.9f));
-    addParameter (delayParam = new AudioParameterFloat ("delay", "Delay Feedback", 0.0f, 1.0f, 0.5f));
+   // addParameter (gainParam  = new AudioParameterFloat ("Note",  "Note",           0.0f, 1.0f, 0.9f));
+    //addParameter (delayParam = new AudioParameterFloat ("delay", "Sensitivity", 0.0f, 1.0f, 0.5f));
 
     initialiseSynth();
 }
 
-JuceDemoPluginAudioProcessor::~JuceDemoPluginAudioProcessor()
+GidiPluginAudioProcessor::~GidiPluginAudioProcessor()
 {
 }
 
-void JuceDemoPluginAudioProcessor::initialiseSynth()
+
+void GidiPluginAudioProcessor::initialiseSynth()
 {
     const int numVoices = 8;
 
@@ -63,7 +67,7 @@ void JuceDemoPluginAudioProcessor::initialiseSynth()
 }
 
 //==============================================================================
-bool JuceDemoPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool GidiPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     // Only mono/stereo and input/output must have same layout
     const AudioChannelSet& mainOutput = layouts.getMainOutputChannelSet();
@@ -84,14 +88,14 @@ bool JuceDemoPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& la
     return true;
 }
 
-AudioProcessor::BusesProperties JuceDemoPluginAudioProcessor::getBusesProperties()
+AudioProcessor::BusesProperties GidiPluginAudioProcessor::getBusesProperties()
 {
-    return BusesProperties().withInput  ("Input",  AudioChannelSet::stereo(), true)
-                            .withOutput ("Output", AudioChannelSet::stereo(), true);
+    return BusesProperties().withInput  ("Input",  AudioChannelSet::mono(), true)
+                            .withOutput ("Output", AudioChannelSet::mono(), true);
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*samplesPerBlock*/)
+void GidiPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*samplesPerBlock*/)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
@@ -99,6 +103,7 @@ void JuceDemoPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sa
     keyboardState.reset();
 
 	guitarNoteStart = 77.782;
+	
 
 	for (int i = 0; i < numOfNotes; i++)
 	{
@@ -108,7 +113,6 @@ void JuceDemoPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sa
 	}
 
 	
-
     if (isUsingDoublePrecision())
     {
         delayBufferDouble.setSize (2, 12000);
@@ -123,14 +127,14 @@ void JuceDemoPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sa
     reset();
 }
 
-void JuceDemoPluginAudioProcessor::releaseResources()
+void GidiPluginAudioProcessor::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
     keyboardState.reset();
 }
 
-void JuceDemoPluginAudioProcessor::reset()
+void GidiPluginAudioProcessor::reset()
 {
     // Use this method as the place to clear any delay lines, buffers, etc, as it
     // means there's been a break in the audio's continuity.
@@ -139,7 +143,7 @@ void JuceDemoPluginAudioProcessor::reset()
 }
 
 template <typename FloatType>
-void JuceDemoPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
+void GidiPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
                                             MidiBuffer& midiMessages,
                                             AudioBuffer<FloatType>& delayBuffer)
 {
@@ -149,7 +153,7 @@ void JuceDemoPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
     // channels that didn't contain input data, (because these aren't
     // guaranteed to be empty - they may contain garbage).
     for (int i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
-        buffer.clear (i, 0, numSamples);
+       buffer.clear (i, 0, numSamples);
 
     // Now pass any incoming midi messages to our keyboard state object, and let it
     // add messages to the buffer if the user is clicking on the on-screen keys
@@ -159,186 +163,276 @@ void JuceDemoPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
     synth.renderNextBlock (buffer, midiMessages, 0, numSamples);
 
     // Apply our delay effect to the new output..
-    applyDelay (buffer, midiMessages);
+    processBuffer(buffer, midiMessages);
 
-   // applyGain (buffer, delayBuffer); // apply our gain-change to the outgoing data..
-
-    // Now ask the host for the current time so we can store it to be displayed later...
-    updateCurrentTimeInfoFromHost();
 }
 
 template <typename FloatType>
-void JuceDemoPluginAudioProcessor::applyGain (AudioBuffer<FloatType>& buffer, AudioBuffer<FloatType>& delayBuffer)
+void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, MidiBuffer& midi)
 {
-    ignoreUnused (delayBuffer);
-    const float gainLevel = *gainParam;
+    const int numSamples = buffer.getNumSamples() , olf =2;
+	float fund = 0, RmsPower2 = 0, RmsPower1 = 0, maxValue =0 , AbsAvgPower1 =0 , AbsAvgPower2 =0;
+	static bool BELOW_THRESHOLD = false;
 
-    for (int channel = 0; channel < getTotalNumOutputChannels(); ++channel)
-        buffer.applyGain (channel, 0, buffer.getNumSamples(), gainLevel);
-}
-
-template <typename FloatType>
-void JuceDemoPluginAudioProcessor::applyDelay (AudioBuffer<FloatType>& buffer, MidiBuffer& midi)
-{
-
-    const int numSamples = buffer.getNumSamples();
-    //const float delayLevel = *delayParam;
-	float fund = 0;
-	int delayPos = 0;
-	auto sum = 0;
+	const float sensitivityLevel = (1.01 - getSensitivity())*0.1; //get sensitivity level from editor thread
 	
-
+	//std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+	
 	for (int channel = 0; channel < getTotalNumOutputChannels(); ++channel)
 	{
-		
 		auto channelData = buffer.getReadPointer(channel);
-		delayPos = delayPosition;
-		std::vector<float> autoCorrOut;
-
-		float peak = 0, maxPeak = 0, sum = 0, power = 0;
-
-		for (int samples = 0; samples < numSamples; samples++)
+		static std::vector<float> autoCorrOut;
+		static float bufferSize_2[1024] = { 0 };
+		autoCorrOut.clear();
+		
+		//fill 1st half of 1024 buffer with old 512 chunk
+		for (int fillHalfBuffer = 0; fillHalfBuffer < numSamples; fillHalfBuffer++)
 		{
-			power = power + abs(channelData[samples]);
+			bufferSize_2[fillHalfBuffer] = bufferSize_2[fillHalfBuffer + 512];
+			AbsAvgPower1 = AbsAvgPower1 + abs(bufferSize_2[fillHalfBuffer]); //calculates sum of abs values in buffer
+			RmsPower1 = RmsPower1 + (bufferSize_2[fillHalfBuffer] * bufferSize_2[fillHalfBuffer]);
 		}
 
-		if (power < 5)
+		//fill 2nd half of 1024 buffer with most recent 512 chunk
+		for (int fillRemaining = numSamples; fillRemaining < numSamples * 2; fillRemaining++)
 		{
-			updateGui(String("Ready..."));
+			bufferSize_2[fillRemaining] = channelData[fillRemaining - 512];
+			AbsAvgPower2 = AbsAvgPower2 + abs(bufferSize_2[fillRemaining]);
+			RmsPower2 = RmsPower2 + (bufferSize_2[fillRemaining] * bufferSize_2[fillRemaining]);
 		}
 
-		else
+		//find max value in buffer (used for attack/velocity)
+		for (int samples = numSamples; samples < numSamples*olf; samples++)
 		{
-
-			for (int n = 0; n < numSamples; n= n+dsf)
+			if ((bufferSize_2[samples]) > maxValue)
 			{
+				maxValue = abs(bufferSize_2[samples]);
+			}
+		}
 
-				for (int i = n; i < numSamples; i = i+dsf)
+		/*
+			==============================================
+			RIFF MODE CODE
+			==============================================
+		*/
+		if (modeSelect == 0)
+		{
+			//check if power of either 512 chunk is less than the sensitivity threshold (set by user) 
+			if (sqrt(RmsPower1 / numSamples) <= sensitivityLevel || sqrt(RmsPower2 / numSamples) <= sensitivityLevel)
+			{
+				BELOW_THRESHOLD = true;
+
+				//if power is very low, ie: user has muted strings/stopped playing...
+				if (AbsAvgPower2/512 <= 0.0005)
 				{
-					sum = sum + (channelData[i] * channelData[i - n]);
+					midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
 				}
-
-				autoCorrOut.push_back(sum);
-				sum = 0;
 			}
 
-			for (int i = 2; i < autoCorrOut.size() - 1; i ++)
-			{
 
-				if ((autoCorrOut.at(i) > autoCorrOut.at(i + 1)) && (autoCorrOut.at(i) > autoCorrOut.at(i - 1)))
+			else
+			{
+				if (BELOW_THRESHOLD == true) //if previous chunk was below threshold...
 				{
-					if (autoCorrOut.at(i) > peak)
+					//perform autoCorrelation and find fundamental pitch
+					AutoCorr(bufferSize_2, autoCorrOut, numSamples, olf);
+					fund = getFundamental(autoCorrOut);
+
+					int fundy = std::round(fund);
+					bool noteFound = mapToMidi(fundy,currentNote); //check if returned frequency can be mapped to a corresponding midi note
+
+					if (noteFound == 0)
 					{
-						peak = autoCorrOut.at(i);
-						maxPeak = i;
+						currentNote = lastNoteValue; //keep track of previous notes for note off midi msg
+					}
+	
+					if (getGlobalDynamicsState() == false) { velocity = 127; }
+
+					else
+					{
+						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+
+						if (velocity > 127)
+						{
+							velocity = 127;
+						}
+						else if (velocity < 0)
+						{
+							velocity = 0;
+						}
+					}
+
+					midi.clear();
+					midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), 0);
+					MidiMessage message = MidiMessage::noteOn(1, currentNote, (uint8)velocity);				
+					midi.addEvent(message, 0);
+
+					velocity = 0;
+					lastNoteValue = currentNote;
+					BELOW_THRESHOLD = false;
+				}
+			}
+		}
+
+		/*
+		==============================================
+		LEAD MODE CODE
+		==============================================
+		*/
+		else if (modeSelect == 1)
+		{
+			
+			if (AbsAvgPower2 / 512 <= 0.0008)
+			{
+				midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
+				PitchWheelVal = 8192;
+			}
+			else
+			{
+				//perform autoCorrelation and find fundamental pitch
+				AutoCorr(bufferSize_2, autoCorrOut, numSamples, olf);
+				fund = getFundamental(autoCorrOut);
+
+				bool noteFound = mapToMidi(fund, currentNote); //check if returned frequency can be mapped to a corresponding midi note
+
+				if (noteFound == true)
+				{
+					midi.clear();
+
+					if (currentNote != lastNoteValue)
+					{
+						if (getGlobalDynamicsState() == false) { velocity = 127; }
+
+						else 
+						{
+							velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+
+							if (velocity > 127)
+							{
+								velocity = 127;
+							}
+							else if (velocity < 0)
+							{
+								velocity = 0;
+							}
+						}
+
+						if (PitchWheelVal > 10000) {}
+						
+						else
+						{
+						
+							midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), 0);
+							midi.addEvent(MidiMessage::noteOn(1, currentNote, (uint8)velocity), 0);
+
+							lastNoteValue = currentNote;
+						}
+						velocity = 0;
+					}
+
+					if (getBendBtnState() == true)
+					{ 
+						midi.addEvent(MidiMessage::pitchWheel(1, PitchWheelVal), 0);
 					}
 				}
 			}
+		
+		
+		}
+		//std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+		//std::chrono::duration<double> time_span = t2 - t1;
+		//double time = time_span.count();
+	}
+		
+}
 
-			fund = (44100/dsf) / maxPeak;
-			int fundy = std::round(fund);
-			autoCorrOut.clear();
+void GidiPluginAudioProcessor::AutoCorr(float (& buffer)[autoCorrLength], std::vector<float>& autoCorr, const int  samples , int olf)
+{
+	float sum = 0;
 
-			int max;
-			int  min;
-			bool noteFound = 0;
+	for (int n = 0; n < samples*olf; n = n + dsf)
+	{
 
-			for (int i = 0; i < 49; i++)
+		for (int i = n; i < samples*olf; i = i + dsf)
+		{
+			sum = sum + (buffer[i] * buffer[i - n]);
+		}
+
+		autoCorr.push_back(sum);
+		sum = 0;
+	}
+}
+
+float GidiPluginAudioProcessor::getFundamental(std::vector<float>& autoCorrResult)
+{
+	float peak = 0, maxPeak = 0;
+
+	for (int i = 2; i < autoCorrResult.size() - 1; i++)
+	{
+
+		if ((autoCorrResult.at(i) > autoCorrResult.at(i + 1)) && (autoCorrResult.at(i) > autoCorrResult.at(i - 1)))
+		{
+			if (autoCorrResult.at(i) > peak)
 			{
-				max = std::round(guitarNoteArr[i] * 1.03);
-				min = std::round(guitarNoteArr[i] / 1.03);
-				if (fundy <= max && fundy >= min)
-				{
-					noteFound = 1;
-					currentNote = midiNoteArr[i];
-					updateGui("midi note: " + String(midiNoteArr[i]));
-					
-					break;
+				peak = autoCorrResult.at(i);
+				maxPeak = i;
+			}
+		}
+	}
+
+	float fundamental = (getSampleRate() / dsf) / maxPeak;
+	return fundamental;
+}
+
+template<typename T>
+bool GidiPluginAudioProcessor::mapToMidi(T f, int &currentN )
+{	
+	int max,min;
+	
+	
+	for (int i = 0; i < 49; i++)
+	{
+		max = std::round(guitarNoteArr[i] * 1.03);
+		min = std::round(guitarNoteArr[i] / 1.03);
+
+		if (f <= max && f >= min)
+		{	
+			if (getBendBtnState() == true && modeSelect == 1)
+			{
+				if (PitchWheelVal > 10000) {
+
+					if (PitchWheelVal > 16000)
+					{
+						PitchWheelVal = 16000;
+					}
+					error = f / guitarNoteArr[currentN - 40];
 				}
 
+				else {
+					currentN = midiNoteArr[i];
+					error = f / guitarNoteArr[i];
+				}
+				PitchWheelVal = std::round(8192 + 4096 * 12 * log2(error));
 			}
-			
-		    if (noteFound == 0)
+			else
 			{
-				updateGui("unknown" + String(fundy));
-				currentNote = lastNoteValue;
+				currentN = midiNoteArr[i];
 			}
-			/*
-			if (fundy < 112 && fundy > 108)
-			{
-				updateGui("A note");
-				currentNote = 45;
-			}
-			
-			else if (fundy < 84 && fundy > 80)
-			{
-				
-				updateGui("E note");
-				currentNote = 41;
-			}
-
-			*/
-			
+			return true;
+			break;
 		}
-
-		
 	}
-		
-	auto noteDuration = 1024;
-	MidiMessage msg;
-	int ignore;
-	midi.clear();
-
-	if ((time + numSamples) >= noteDuration)
-	{
-		int r = (rand() % 60) + +60;
-		auto offset = jmax(0, jmin((int)(noteDuration - time), numSamples - 1));
-
-		if (lastNoteValue != currentNote)
-		{
-
-			midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), offset);
-			midi.addEvent(MidiMessage::noteOn(1, currentNote, (uint8)127), offset);
-			lastNoteValue = currentNote;
-			//midi.addEvent (MidiMessage::noteOff (1, lastNoteValue), offset);		
-		}
-
-		else 
-		{
-
-		}
-		
-	}
-
-	time = (time + numSamples) % noteDuration;
-	
-}
-
-void JuceDemoPluginAudioProcessor::updateCurrentTimeInfoFromHost()
-{
-    if (AudioPlayHead* ph = getPlayHead())
-    {
-        AudioPlayHead::CurrentPositionInfo newTime;
-
-        if (ph->getCurrentPosition (newTime))
-        {
-            lastPosInfo = newTime;  // Successfully got the current time from the host..
-            return;
-        }
-    }
-
-    // If the host fails to provide the current time, we'll just reset our copy to a default..
-    lastPosInfo.resetToDefault();
+	return false;
 }
 
 //==============================================================================
-AudioProcessorEditor* JuceDemoPluginAudioProcessor::createEditor()
+AudioProcessorEditor* GidiPluginAudioProcessor::createEditor()
 {
-    return new JuceDemoPluginAudioProcessorEditor (*this);
+    return new GuiWorkAudioProcessorEditor(*this);
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
+void GidiPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
 {
     // You should use this method to store your parameters in the memory block.
     // Here's an example of how you can use XML to make it easy and more robust:
@@ -359,7 +453,7 @@ void JuceDemoPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
     copyXmlToBinary (xml, destData);
 }
 
-void JuceDemoPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void GidiPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
@@ -384,24 +478,9 @@ void JuceDemoPluginAudioProcessor::setStateInformation (const void* data, int si
     }
 }
 
-void JuceDemoPluginAudioProcessor::updateTrackProperties (const TrackProperties& properties)
-{
-    trackProperties = properties;
-
-    if (auto* editor = dynamic_cast<JuceDemoPluginAudioProcessorEditor*> (getActiveEditor()))
-        editor->updateTrackProperties ();
-}
-
-void JuceDemoPluginAudioProcessor::updateGui(String c)
-{
-	String text = c;
-	if (auto* editor = dynamic_cast<JuceDemoPluginAudioProcessorEditor*> (getActiveEditor()))
-		editor->updateGui(text);
-}
-
 //==============================================================================
 // This creates new instances of the plugin..
 AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new JuceDemoPluginAudioProcessor();
+    return new GidiPluginAudioProcessor();
 }
