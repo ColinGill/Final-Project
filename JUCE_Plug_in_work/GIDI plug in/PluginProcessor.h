@@ -45,20 +45,19 @@ public:
     //==============================================================================
 	//Setters
 	void setGlobalDynamicsEnable(bool dEnable) { globalDynamics = dEnable; };
-	void setDynamics(int d) { dynamics = d; };
+	void setDynamics(int d , int i) { dynamics[i] = d; };
 	void setMode(uint8 m) { modeSelect = m; };
-	void setSensitivity(double s) { sensitivity = s; };
+	void setSensitivity(double s , int i) { sensitivity[i]= s; };
 	void setBendBtnState(bool b) { Ebends = b; };
 	void setKeySig(int k) { keySignature = k; };
 
 	//Getters
 	uint8 getMode() { return modeSelect; };
-	int getDynamics() { return dynamics; };
+	int getDynamics(int i) { return dynamics[i]; };
 	int getKeySig() { return keySignature; };
-	double getSensitivity() { return sensitivity; };
+	double getSensitivity(int i ) { return sensitivity[i]; };
 	bool getBendBtnState() { return Ebends; }
 	bool getGlobalDynamicsState() { return globalDynamics; }
-
 
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -69,13 +68,13 @@ public:
     void processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages) override
     {
         jassert (! isUsingDoublePrecision());
-        process (buffer, midiMessages, delayBufferFloat);
+        process (buffer, midiMessages, BufferFloat);
     }
 
     void processBlock (AudioBuffer<double>& buffer, MidiBuffer& midiMessages) override
     {
         jassert (isUsingDoublePrecision());
-        process (buffer, midiMessages, delayBufferDouble);
+        process (buffer, midiMessages, BufferDouble);
     }
 
     //==============================================================================
@@ -101,61 +100,22 @@ public:
     void getStateInformation (MemoryBlock&) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //==============================================================================
-    //void updateTrackProperties (const TrackProperties& properties) override;
-
-	//void updateGui(String);
-
-    //==============================================================================
-    // These properties are public so that our editor component can access them
-    // A bit of a hacky way to do it, but it's only a demo! Obviously in your own
-    // code you'll do this much more neatly..
-
-    // this is kept up to date with the midi messages that arrive, and the UI component
-    // registers with it so it can represent the incoming messages
-    MidiKeyboardState keyboardState;
-
-    // this keeps a copy of the last set of time info that was acquired during an audio
-    // callback - the UI component will read this and display it.
-    AudioPlayHead::CurrentPositionInfo lastPosInfo;
-
-    // these are used to persist the UI's size - the values are stored along with the
-    // filter's other parameters, and the UI component will update them when it gets
-    // resized.
-    int lastUIWidth = 400, lastUIHeight = 200;
-
-    // Our parameters
-    AudioParameterFloat* gainParam = nullptr;
-    AudioParameterFloat* delayParam = nullptr;
-
-    // Current track colour and name
-    TrackProperties trackProperties;
-
 private:
     //==============================================================================
-	AudioBuffer<float> delayBufferFloat;
-	AudioBuffer<double> delayBufferDouble;
+	AudioBuffer<float> BufferFloat;
+	AudioBuffer<double> BufferDouble;
 
 	static const int autoCorrLength = 1024;
-	const int numOfNotes = 49, dsf = 1;
+	const int numOfNotes = 49, dsf = 1, intervals[7] = { 0,2,4,5,7,9,11 };
 	bool Ebends = false, globalDynamics = false;
-
-	uint8 modeSelect = 0;
-	int guitarNoteArr[49], midiNoteArr[49];
-	const int intervals[7] = {0, 2,4,5,7,9,11 };
-	
-	float guitarNoteStart;
-	int delayPosition = 0;
-	uint8 currentNote = 0, lastNoteValue, currentThird = 0, lastThird;
-	int dynamics = 0.5, velocity, PitchWheelVal = 0, keySignature = 1, diminished = 0;
-	int time;
-	float rate, sensitivity = 0.86, error = 1;
-    int bufferSafe = 0;
-	SortedSet<int> notes;
-	Synthesiser synth;
-	
+	float guitarNoteStart, rate, error = 1;
+	double sensitivity[3] = { 0.8 , 0.8 , 0.8 };
+	uint8 currentNote = 0, lastNoteValue, currentThird = 0, lastThird , modeSelect = 0;
+	int guitarNoteArr[49], midiNoteArr[49], velocity, PitchWheelVal = 0, keySignature = 1, diminished = 0, bufferSafe = 0;
+	double dynamics[3] = { 0.5 , 0.5 , 0.5 };
+   
     template <typename FloatType>
-    void process (AudioBuffer<FloatType>& buffer, MidiBuffer& midiMessages, AudioBuffer<FloatType>& delayBuffer);
+    void process (AudioBuffer<FloatType>& buffer, MidiBuffer& midiMessages, AudioBuffer<FloatType>& Buffer);
   
     template <typename FloatType>
     void processBuffer (AudioBuffer<FloatType>&, MidiBuffer& midi);
@@ -166,7 +126,6 @@ private:
 	void AutoCorr(float (&)[autoCorrLength], std::vector<float>&, const int  , int);
 	float getFundamental(std::vector<float>&);
 	
-    void initialiseSynth();
     static BusesProperties getBusesProperties();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GidiPluginAudioProcessor)

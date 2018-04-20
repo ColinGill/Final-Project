@@ -86,11 +86,11 @@ void GuiWorkAudioProcessorEditor::RiffMode::sliderValueChanged(Slider * slider)
 
 	if (slider->getName() == "slider1")
 	{
-		processingRef.setSensitivity(slider->getValue());
+		processingRef.setSensitivity(slider->getValue(), 0);
 	}
 	else if (slider->getName() == "slider2")
 	{
-		processingRef.setDynamics(int(slider->getValue()));
+		processingRef.setDynamics(int(slider->getValue()),0);
 	}
 }
 
@@ -140,11 +140,11 @@ void GuiWorkAudioProcessorEditor::LeadModeComponents::sliderValueChanged(Slider 
 {
 	if (slider->getName() == "sSlider")
 	{
-		processingRef.setSensitivity(slider->getValue());
+		processingRef.setSensitivity(slider->getValue(),1);
 	}
 	else if (slider->getName() == "dSlider")
 	{
-		processingRef.setDynamics(int(slider->getValue()));
+		processingRef.setDynamics(int(slider->getValue()),1);
 	}
 }
 
@@ -166,6 +166,15 @@ void GuiWorkAudioProcessorEditor::ChordModeComponent::sliderValueChanged(Slider 
 	{
 		processingRef.setKeySig(slider->getValue());
 	}
+
+	if (slider->getName() == "Sslider")
+	{
+		processingRef.setSensitivity(slider->getValue(),2);
+	}
+	else if (slider->getName() == "Dslider")
+	{
+		processingRef.setDynamics(int(slider->getValue()),2);
+	}
 }
 
 void GuiWorkAudioProcessorEditor::ChordModeComponent::paint(Graphics & g)
@@ -178,6 +187,7 @@ void GuiWorkAudioProcessorEditor::ChordModeComponent::paint(Graphics & g)
 			x, y, width, height,
 			0, 0, chordWheelpng.getWidth(), chordWheelpng.getHeight());
 	}
+
 	{
 		int x = 430, y = 10, width = 200, height = 30;
 		String text(TRANS("CHORD MODE"));

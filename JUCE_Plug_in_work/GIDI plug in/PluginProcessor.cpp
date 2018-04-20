@@ -47,10 +47,6 @@ GidiPluginAudioProcessor::~GidiPluginAudioProcessor()
 }
 
 
-void GidiPluginAudioProcessor::initialiseSynth()
-{
-  
-}
 
 //==============================================================================
 bool GidiPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -85,9 +81,7 @@ void GidiPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sample
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
-    synth.setCurrentPlaybackSampleRate (newSampleRate);
-    keyboardState.reset();
-
+  
 	guitarNoteStart = 77.782;
 
 	for (int i = 0; i < numOfNotes; i++)
@@ -100,13 +94,13 @@ void GidiPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sample
 	
     if (isUsingDoublePrecision())
     {
-        delayBufferDouble.setSize (2, 12000);
-        delayBufferFloat.setSize (1, 1);
+        BufferDouble.setSize (2, 12000);
+        BufferFloat.setSize (1, 1);
     }
     else
     {
-        delayBufferFloat.setSize (2, 12000);
-        delayBufferDouble.setSize (1, 1);
+        BufferFloat.setSize (2, 12000);
+        BufferDouble.setSize (1, 1);
     }
 
     reset();
@@ -116,38 +110,30 @@ void GidiPluginAudioProcessor::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
-    keyboardState.reset();
 }
 
 void GidiPluginAudioProcessor::reset()
 {
     // Use this method as the place to clear any delay lines, buffers, etc, as it
     // means there's been a break in the audio's continuity.
-    delayBufferFloat.clear();
-    delayBufferDouble.clear();
+    BufferFloat.clear();
+    BufferDouble.clear();
 }
 
 template <typename FloatType>
 void GidiPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
                                             MidiBuffer& midiMessages,
-                                            AudioBuffer<FloatType>& delayBuffer)
+                                            AudioBuffer<FloatType>& Buffer)
 {
     const int numSamples = buffer.getNumSamples();
-
     // In case we have more outputs than inputs, we'll clear any output
     // channels that didn't contain input data, (because these aren't
     // guaranteed to be empty - they may contain garbage).
+
     for (int i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
        buffer.clear (i, 0, numSamples);
 
-    // Now pass any incoming midi messages to our keyboard state object, and let it
-    // add messages to the buffer if the user is clicking on the on-screen keys
-    keyboardState.processNextMidiBuffer (midiMessages, 0, numSamples, true);
-
-    // and now get our synth to process these midi events and generate its output.
-    synth.renderNextBlock (buffer, midiMessages, 0, numSamples);
-
-    // Apply our delay effect to the new output..
+    // Apply effect to the new output..
     processBuffer(buffer, midiMessages);
 
 }
@@ -159,7 +145,6 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 	const int olf = size / numSamples;
 	float fund = 0, RmsPower2 = 0, RmsPower1 = 0, maxValue =0 , AbsAvgPower1 =0 , AbsAvgPower2 =0;
 	static bool BELOW_THRESHOLD = false;
-	const float sensitivityLevel = (1.01 - getSensitivity())*0.1; //get sensitivity level from editor thread
 	
 	//std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 	
@@ -184,7 +169,6 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 			bufferSize_2[(size - numSamples) + i] = channelData[i];
 		}
 
-
 		for (int fillHalfBuffer = 0; fillHalfBuffer < size/2; fillHalfBuffer++)
 		{
 			AbsAvgPower1 = AbsAvgPower1 + abs(bufferSize_2[fillHalfBuffer]); //calculates sum of abs values in buffer
@@ -192,11 +176,11 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 		}
 
 		for (int fillRemaining = size/2; fillRemaining < size; fillRemaining++)
-		{
-			
+		{			
 			AbsAvgPower2 = AbsAvgPower2 + abs(bufferSize_2[fillRemaining]);
 			RmsPower2 = RmsPower2 + (bufferSize_2[fillRemaining] * bufferSize_2[fillRemaining]);
 		}
+
 		//find max value in buffer (used for attack/velocity)
 		for (int samples = 0; samples < size; samples++)
 		{
@@ -218,7 +202,9 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 		*/
 		if (modeSelect == 0 && bufferSafe == 0)
 		{
-			
+			const float sensitivityLevel = (1.01 - getSensitivity(modeSelect))*0.1; //get sensitivity level from editor thread
+			const int dynamicsLevel= 1000 - (getDynamics(modeSelect) * 100);
+
 			//check if power of either 512 chunk is less than the sensitivity threshold (set by user) 
 			if (sqrt(RmsPower1 / 512) <= sensitivityLevel || sqrt(RmsPower2 / 512) <= sensitivityLevel)
 			{
@@ -251,7 +237,7 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 
 					else
 					{
-						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+						velocity = (int)((maxValue * dynamicsLevel)) * 2;
 
 						if (velocity > 127)
 						{
@@ -282,7 +268,9 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 		*/
 		else if (modeSelect == 1 && bufferSafe == 0)
 		{
-			
+			const float sensitivityLevel = (1.01 - getSensitivity(modeSelect))*0.1; //get sensitivity level from editor thread
+			const int dynamicsLevel = 1000 - (getDynamics(modeSelect) * 100);
+
 			if (AbsAvgPower2 / 512 <= 0.0008)
 			{
 				midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
@@ -305,7 +293,7 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 
 					else
 					{
-						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+						velocity = (int)((maxValue * dynamicsLevel)) * 2;
 
 						if (velocity > 127)
 						{
@@ -342,7 +330,9 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 
 		else if (modeSelect == 2 && bufferSafe == 0)
 		{
-			
+			const float sensitivityLevel = (1.01 - getSensitivity(modeSelect))*0.1; //get sensitivity level from editor thread
+			const int dynamicsLevel = 1000 - (getDynamics(modeSelect) * 100);
+
 			//check if power of either 512 chunk is less than the sensitivity threshold (set by user) 
 			if (sqrt(RmsPower1 / numSamples) <= sensitivityLevel || sqrt(RmsPower2 / numSamples) <= sensitivityLevel)
 			{
@@ -378,7 +368,7 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 
 					else
 					{
-						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+						velocity = (int)((maxValue * dynamicsLevel)) * 2;
 
 						if (velocity > 127)
 						{
@@ -537,16 +527,12 @@ void GidiPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
     XmlElement xml ("MYPLUGINSETTINGS");
 
     // add some attributes to it..
-    xml.setAttribute ("uiWidth", lastUIWidth);
-    xml.setAttribute ("uiHeight", lastUIHeight);
+   
 
     // Store the values of all our parameters, using their param ID as the XML attribute
-    for (auto* param : getParameters())
-        if (auto* p = dynamic_cast<AudioProcessorParameterWithID*> (param))
-            xml.setAttribute (p->paramID, p->getValue());
-
+   
     // then use this helper function to stuff it into the binary blob and return it..
-    copyXmlToBinary (xml, destData);
+   
 }
 
 void GidiPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
@@ -555,23 +541,7 @@ void GidiPluginAudioProcessor::setStateInformation (const void* data, int sizeIn
     // whose contents will have been created by the getStateInformation() call.
 
     // This getXmlFromBinary() helper function retrieves our XML from the binary blob..
-    ScopedPointer<XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
-
-    if (xmlState != nullptr)
-    {
-        // make sure that it's actually our type of XML object..
-        if (xmlState->hasTagName ("MYPLUGINSETTINGS"))
-        {
-            // ok, now pull out our last window size..
-            lastUIWidth  = jmax (xmlState->getIntAttribute ("uiWidth", lastUIWidth), 400);
-            lastUIHeight = jmax (xmlState->getIntAttribute ("uiHeight", lastUIHeight), 200);
-
-            // Now reload our parameters..
-            for (auto* param : getParameters())
-                if (auto* p = dynamic_cast<AudioProcessorParameterWithID*> (param))
-                    p->setValue ((float) xmlState->getDoubleAttribute (p->paramID, p->getValue()));
-        }
-    }
+  
 }
 
 //==============================================================================

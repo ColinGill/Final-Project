@@ -20,8 +20,6 @@ It contains the basic framework code for a JUCE plugin editor.
 /**
 */
 
-
-
 class GuiWorkAudioProcessorEditor : public AudioProcessorEditor, private Button::Listener
 
 
@@ -57,7 +55,7 @@ private:
 			text.setText(TRANS("'Time to Chugg...'\n\n"
 				"Riff mode allows for tremolo style playing, perfect for converting your favourite riffs into midi! "
 				"A sensivity slider caters for different player styles (set it high if you play light, low if you play hard)."
-				" The dynamics slider monitors the player's attack and mapps it to the midi's velocity."
+				" The dynamics slider monitors the player's attack and maps it to the midi's velocity."
 				" Set it low for minimum response, high for very a dynamic response\n"), NotificationType::dontSendNotification);
 			text.setFont(Font("Pixellari", 14.00f, Font::plain));
 			text.setJustificationType(Justification::centred);
@@ -79,12 +77,12 @@ private:
 		void resized() override
 		{
 			slider1.setRange(0.0, 1.0, 0.01);
-			slider1.setValue(processingRef.getSensitivity());
+			slider1.setValue(processingRef.getSensitivity(0));
 			slider1.setSize(80, 40);
 			slider1.setBounds(30, 40, 200, 20);
 
 			slider2.setRange(1.0, 10, 1);
-			slider2.setValue(processingRef.getDynamics());
+			slider2.setValue(processingRef.getDynamics(0));
 			slider2.setSize(80, 40);
 			slider2.setBounds(30, 90, 200, 20);
 
@@ -137,12 +135,12 @@ private:
 		void resized() override
 		{
 			slider1.setRange(0.0, 1.0, 0.01);
-			slider1.setValue(processingRef.getSensitivity());
+			slider1.setValue(processingRef.getSensitivity(1));
 			slider1.setSize(100, 50);
 			slider1.setBounds(30, 40, 200, 20);
 
 			slider2.setRange(1.0, 10, 1);
-			slider2.setValue(processingRef.getDynamics());
+			slider2.setValue(processingRef.getDynamics(1));
 			slider2.setSize(100, 50);
 			slider2.setBounds(30, 100, 200, 20);
 
@@ -186,8 +184,8 @@ private:
 			addAndMakeVisible(slider1);
 			addAndMakeVisible(slider2);
 			chordWheel.setName("chordWheel");
-			slider1.setName("slider1");
-			slider2.setName("slider2");
+			slider1.setName("Sslider");
+			slider2.setName("Dslider");
 			chordWheel.setValue(p.getKeySig());
 			chordWheel.setRange(1, 12, 1);
 			chordWheel.setSliderStyle(Slider::RotaryHorizontalVerticalDrag);
@@ -204,12 +202,12 @@ private:
 		void resized() override
 		{
 			slider1.setRange(0.0, 1.0, 0.01);
-			slider1.setValue(processingRef.getSensitivity());
+			slider1.setValue(processingRef.getSensitivity(2));
 			slider1.setSize(80, 40);
 			slider1.setBounds(10, 40, 200, 20);
 
 			slider2.setRange(1.0, 10, 1);
-			slider2.setValue(processingRef.getDynamics());
+			slider2.setValue(processingRef.getDynamics(2));
 			slider2.setSize(80, 40);
 			slider2.setBounds(10, 140, 200, 20);
 			text.setSize(200, 200);
