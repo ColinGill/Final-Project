@@ -38,15 +38,8 @@ AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 GidiPluginAudioProcessor::GidiPluginAudioProcessor()
     : AudioProcessor (getBusesProperties())
 {
-    lastPosInfo.resetToDefault();
-
-    // This creates our parameters. We'll keep some raw pointers to them in this class,
-    // so that we can easily access them later, but the base class will take care of
-    // deleting them for us.
-   // addParameter (gainParam  = new AudioParameterFloat ("Note",  "Note",           0.0f, 1.0f, 0.9f));
-    //addParameter (delayParam = new AudioParameterFloat ("delay", "Sensitivity", 0.0f, 1.0f, 0.5f));
-
-    initialiseSynth();
+   
+    
 }
 
 GidiPluginAudioProcessor::~GidiPluginAudioProcessor()
@@ -56,14 +49,7 @@ GidiPluginAudioProcessor::~GidiPluginAudioProcessor()
 
 void GidiPluginAudioProcessor::initialiseSynth()
 {
-    const int numVoices = 8;
-
-    // Add some voices...
-    for (int i = numVoices; --i >= 0;)
-        synth.addVoice (new SineWaveVoice());
-
-    // ..and give the synth a sound to play
-    synth.addSound (new SineWaveSound());
+  
 }
 
 //==============================================================================
@@ -103,7 +89,6 @@ void GidiPluginAudioProcessor::prepareToPlay (double newSampleRate, int /*sample
     keyboardState.reset();
 
 	guitarNoteStart = 77.782;
-	
 
 	for (int i = 0; i < numOfNotes; i++)
 	{
@@ -170,10 +155,10 @@ void GidiPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
 template <typename FloatType>
 void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, MidiBuffer& midi)
 {
-    const int numSamples = buffer.getNumSamples() , olf =2;
+    const int numSamples = buffer.getNumSamples(), size = 1024;
+	const int olf = size / numSamples;
 	float fund = 0, RmsPower2 = 0, RmsPower1 = 0, maxValue =0 , AbsAvgPower1 =0 , AbsAvgPower2 =0;
 	static bool BELOW_THRESHOLD = false;
-
 	const float sensitivityLevel = (1.01 - getSensitivity())*0.1; //get sensitivity level from editor thread
 	
 	//std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -182,32 +167,48 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 	{
 		auto channelData = buffer.getReadPointer(channel);
 		static std::vector<float> autoCorrOut;
-		static float bufferSize_2[1024] = { 0 };
+		static float bufferSize_2[size] = { 0 };
 		autoCorrOut.clear();
 		
-		//fill 1st half of 1024 buffer with old 512 chunk
-		for (int fillHalfBuffer = 0; fillHalfBuffer < numSamples; fillHalfBuffer++)
+		
+		for (int i = 0; i < (size / numSamples) - 1; i++)
 		{
-			bufferSize_2[fillHalfBuffer] = bufferSize_2[fillHalfBuffer + 512];
+			for (int fillHalfBuffer = 0; fillHalfBuffer < numSamples; fillHalfBuffer++)
+			{
+				bufferSize_2[fillHalfBuffer + (numSamples * i)] = bufferSize_2[fillHalfBuffer + (numSamples* (i + 1))];
+			}
+
+		}
+		for (int i = 0; i < numSamples; i++)
+		{
+			bufferSize_2[(size - numSamples) + i] = channelData[i];
+		}
+
+
+		for (int fillHalfBuffer = 0; fillHalfBuffer < size/2; fillHalfBuffer++)
+		{
 			AbsAvgPower1 = AbsAvgPower1 + abs(bufferSize_2[fillHalfBuffer]); //calculates sum of abs values in buffer
 			RmsPower1 = RmsPower1 + (bufferSize_2[fillHalfBuffer] * bufferSize_2[fillHalfBuffer]);
 		}
 
-		//fill 2nd half of 1024 buffer with most recent 512 chunk
-		for (int fillRemaining = numSamples; fillRemaining < numSamples * 2; fillRemaining++)
+		for (int fillRemaining = size/2; fillRemaining < size; fillRemaining++)
 		{
-			bufferSize_2[fillRemaining] = channelData[fillRemaining - 512];
+			
 			AbsAvgPower2 = AbsAvgPower2 + abs(bufferSize_2[fillRemaining]);
 			RmsPower2 = RmsPower2 + (bufferSize_2[fillRemaining] * bufferSize_2[fillRemaining]);
 		}
-
 		//find max value in buffer (used for attack/velocity)
-		for (int samples = numSamples; samples < numSamples*olf; samples++)
+		for (int samples = 0; samples < size; samples++)
 		{
 			if ((bufferSize_2[samples]) > maxValue)
 			{
 				maxValue = abs(bufferSize_2[samples]);
 			}
+		}
+		bufferSafe++;
+		if (bufferSafe >= size/(numSamples*2))
+		{
+			bufferSafe = 0;
 		}
 
 		/*
@@ -215,10 +216,11 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 			RIFF MODE CODE
 			==============================================
 		*/
-		if (modeSelect == 0)
+		if (modeSelect == 0 && bufferSafe == 0)
 		{
+			
 			//check if power of either 512 chunk is less than the sensitivity threshold (set by user) 
-			if (sqrt(RmsPower1 / numSamples) <= sensitivityLevel || sqrt(RmsPower2 / numSamples) <= sensitivityLevel)
+			if (sqrt(RmsPower1 / 512) <= sensitivityLevel || sqrt(RmsPower2 / 512) <= sensitivityLevel)
 			{
 				BELOW_THRESHOLD = true;
 
@@ -228,7 +230,6 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 					midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
 				}
 			}
-
 
 			else
 			{
@@ -279,7 +280,7 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 		LEAD MODE CODE
 		==============================================
 		*/
-		else if (modeSelect == 1)
+		else if (modeSelect == 1 && bufferSafe == 0)
 		{
 			
 			if (AbsAvgPower2 / 512 <= 0.0008)
@@ -292,52 +293,147 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 				//perform autoCorrelation and find fundamental pitch
 				AutoCorr(bufferSize_2, autoCorrOut, numSamples, olf);
 				fund = getFundamental(autoCorrOut);
-
 				bool noteFound = mapToMidi(fund, currentNote); //check if returned frequency can be mapped to a corresponding midi note
 
-				if (noteFound == true)
+			if (noteFound == true)
+			{
+				midi.clear();
+
+				if (currentNote != lastNoteValue)
 				{
-					midi.clear();
+					if (getGlobalDynamicsState() == false) { velocity = 127; }
 
-					if (currentNote != lastNoteValue)
+					else
 					{
-						if (getGlobalDynamicsState() == false) { velocity = 127; }
+						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
 
-						else 
+						if (velocity > 127)
 						{
-							velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
-
-							if (velocity > 127)
-							{
-								velocity = 127;
-							}
-							else if (velocity < 0)
-							{
-								velocity = 0;
-							}
+							velocity = 127;
 						}
-
-						if (PitchWheelVal > 10000) {}
-						
-						else
+						else if (velocity < 0)
 						{
-						
-							midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), 0);
-							midi.addEvent(MidiMessage::noteOn(1, currentNote, (uint8)velocity), 0);
-
-							lastNoteValue = currentNote;
+							velocity = 0;
 						}
-						velocity = 0;
 					}
 
-					if (getBendBtnState() == true)
-					{ 
-						midi.addEvent(MidiMessage::pitchWheel(1, PitchWheelVal), 0);
+					if (PitchWheelVal > 10000) {}
+
+					else
+					{
+
+						midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), 0);
+						midi.addEvent(MidiMessage::noteOn(1, currentNote, (uint8)velocity), 0);
+
+						lastNoteValue = currentNote;
 					}
+					velocity = 0;
+				}
+
+				if (getBendBtnState() == true)
+				{
+					midi.addEvent(MidiMessage::pitchWheel(1, PitchWheelVal), 0);
 				}
 			}
-		
-		
+						}
+
+
+		}
+
+		else if (modeSelect == 2 && bufferSafe == 0)
+		{
+			
+			//check if power of either 512 chunk is less than the sensitivity threshold (set by user) 
+			if (sqrt(RmsPower1 / numSamples) <= sensitivityLevel || sqrt(RmsPower2 / numSamples) <= sensitivityLevel)
+			{
+				BELOW_THRESHOLD = true;
+
+				//if power is very low, ie: user has muted strings/stopped playing...
+				if (AbsAvgPower2 / 512 <= 0.0005)
+				{
+					midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
+					midi.addEvent(MidiMessage::noteOff(1, currentNote+ (7- diminished)), 0);
+					midi.addEvent(MidiMessage::noteOff(1, currentThird), 0);
+				}
+			}
+
+
+			else
+			{
+				if (BELOW_THRESHOLD == true) //if previous chunk was below threshold...
+				{
+					//perform autoCorrelation and find fundamental pitch
+					AutoCorr(bufferSize_2, autoCorrOut, numSamples, olf);
+					fund = getFundamental(autoCorrOut);
+
+					int fundy = std::round(fund);
+					bool noteFound = mapToMidi(fundy, currentNote); //check if returned frequency can be mapped to a corresponding midi note
+
+					if (noteFound == 0)
+					{
+						currentNote = lastNoteValue; //keep track of previous notes for note off midi msg
+					}
+
+					if (getGlobalDynamicsState() == false) { velocity = 127; }
+
+					else
+					{
+						velocity = (int)((maxValue * (1100 - (dynamics * 100)))) * 2;
+
+						if (velocity > 127)
+						{
+							velocity = 127;
+						}
+						else if (velocity < 0)
+						{
+							velocity = 0;
+						}
+					}
+
+					midi.clear();
+					bool keyMatch = false;
+
+					for (int i = 1; i <= 7; i ++)
+					{
+						
+						if ((currentNote-((40+ keySignature - 1)-12)) % 12 == intervals[i - 1])
+						{
+							diminished = 0;
+							keyMatch = true;
+							if (i - 1 == 0 || i - 1 == 3 || i - 1 == 4)
+							{
+								currentThird = currentNote + 4;//major 3rd
+								break;
+							}
+							else if (i - 1 == 1 || i - 1 == 2 || i - 1 == 5)
+							{
+								currentThird = currentNote + 3;//minor 3rd
+								break;
+							}
+							else
+							{
+								currentThird = currentNote + 3;//diminished
+								diminished = 1;
+								break;
+							}
+						}
+					}
+					if (keyMatch == true)
+					{
+
+						midi.addEvent(MidiMessage::noteOff(1, lastNoteValue + (7 - diminished)), 0);
+						midi.addEvent(MidiMessage::noteOff(1, lastNoteValue), 0);
+						midi.addEvent(MidiMessage::noteOff(1, lastThird), 0);
+						midi.addEvent(MidiMessage::noteOn(1, currentNote, (uint8)velocity), 0);
+						midi.addEvent(MidiMessage::noteOn(1, currentNote + (7-diminished), (uint8)velocity), 0); //5th is same most chords
+						midi.addEvent(MidiMessage::noteOn(1, currentThird, (uint8)velocity), 0);
+						velocity = 0;
+						lastNoteValue = currentNote;
+						lastThird = currentThird;
+					}
+					BELOW_THRESHOLD = false;
+				}
+			}
 		}
 		//std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
 		//std::chrono::duration<double> time_span = t2 - t1;
@@ -385,7 +481,7 @@ float GidiPluginAudioProcessor::getFundamental(std::vector<float>& autoCorrResul
 }
 
 template<typename T>
-bool GidiPluginAudioProcessor::mapToMidi(T f, int &currentN )
+bool GidiPluginAudioProcessor::mapToMidi(T f, uint8 &currentN )
 {	
 	int max,min;
 	

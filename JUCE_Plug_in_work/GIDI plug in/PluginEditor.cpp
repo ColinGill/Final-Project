@@ -12,7 +12,6 @@ It contains the basic framework code for a JUCE plugin editor.
 #include "PluginEditor.h"
 #include "GidiImages.h"
 
-
 //==============================================================================
 GuiWorkAudioProcessorEditor::GuiWorkAudioProcessorEditor(GidiPluginAudioProcessor& p)
 	: AudioProcessorEditor(&p), processor(p), tab(p)
@@ -25,21 +24,19 @@ GuiWorkAudioProcessorEditor::GuiWorkAudioProcessorEditor(GidiPluginAudioProcesso
 	
 	enableDynamics.setButtonText(TRANS("Enable Dynamics"));
 	enableDynamics.addListener(this);
-	enableDynamics.setToggleState(true, dontSendNotification);
+	enableDynamics.setToggleState(p.getGlobalDynamicsState(), dontSendNotification);
 	enableDynamics.setColour(ToggleButton::textColourId, Colour(0xC0ffffff));
 	addAndMakeVisible(enableDynamics);
 
+	int i = p.getMode();	
+	tab.setTabBarDepth(40);
+	tab.addTab(".                                      .", Colour(0x60004cFF), new RiffMode(processor), true);
+	tab.addTab(".                                      .", Colour(0x60ffda00), new LeadModeComponents(processor), true);
+	tab.addTab(".                                      .", Colour(0x60ff6d00), new ChordModeComponent(processor), true);
 	addAndMakeVisible(tab);
-	tab.setTabBarDepth(36);
-	tab.addTab(".                                .", Colour(0x30004cFF), new SliderHolder(processor), true);
-	tab.addTab(".    LEAD MODE               .", Colour(0x30FF0000), new LeadModeComponents(processor), true);
-	tab.addTab("     CHORD MODE      ", Colour(0x60004c87), new LeadModeComponents(processor), true);
-	//tab.addTab("About This Software", Colour(0x60004c87), &midiVolume ,true);
-	tab.setCurrentTabIndex(0);
+	tab.setCurrentTabIndex(i);
 
 	cachedImage_gidiBg_png_1 = ImageCache::getFromMemory(gidiBg_png, gidiBg_pngSize);
-	cachedImage_riffmode_png_1 = ImageCache::getFromMemory(riffmode_png, riffmode_pngSize);
-
 	setSize(700, 400);
 }
 
@@ -52,7 +49,7 @@ GuiWorkAudioProcessorEditor::~GuiWorkAudioProcessorEditor()
 void GuiWorkAudioProcessorEditor::paint(Graphics& g)
 {
 	g.fillAll(Colour(0xff1f5a77));
-
+	//enableDynamics.setToggleState()
 
 	{
 		int x = 0, y = 0, width = 700, height = 400;
@@ -62,16 +59,7 @@ void GuiWorkAudioProcessorEditor::paint(Graphics& g)
 			x, y, width, height,
 			0, 0, cachedImage_gidiBg_png_1.getWidth(), cachedImage_gidiBg_png_1.getHeight());
 	}
-	{
-		int x = 50, y = 80, width = 200, height = 32;
-		
-		g.setColour(Colours::black);
-		g.drawImage(cachedImage_riffmode_png_1,
-			x, y, width, height,
-			0, 0, cachedImage_riffmode_png_1.getWidth(), cachedImage_riffmode_png_1.getHeight());
-	}
-
-
+	
 }
 
 
@@ -79,24 +67,21 @@ void GuiWorkAudioProcessorEditor::resized()
 {
 	// This is generally where you'll want to lay out the positions of any
 	// subcomponents in your editor..
-	enableDynamics.setBounds(10, 370, 150, 32);
-	tab.setBounds(50, 80, 600, 280);
+	enableDynamics.setBounds(530, 368, 150, 32);
+	tab.setBounds(22, 130, 652, 230);
 }
 
 
 //button for global dynamics enable
 void GuiWorkAudioProcessorEditor::buttonClicked(Button * btnClicked)
-{
-	static bool state = true;
-	if (btnClicked->getButtonText() == "Enable Dynamics")
-	{
+{	
+		static bool state = processor.getGlobalDynamicsState();
 		state = !state;
-		processor.setGlobalDynamicsEnable(state);
-	}
+		processor.setGlobalDynamicsEnable(state);	
 }
 
 
-void GuiWorkAudioProcessorEditor::SliderHolder::sliderValueChanged(Slider * slider)
+void GuiWorkAudioProcessorEditor::RiffMode::sliderValueChanged(Slider * slider)
 {
 
 	if (slider->getName() == "slider1")
@@ -107,6 +92,48 @@ void GuiWorkAudioProcessorEditor::SliderHolder::sliderValueChanged(Slider * slid
 	{
 		processingRef.setDynamics(int(slider->getValue()));
 	}
+}
+
+void GuiWorkAudioProcessorEditor::RiffMode::paint(Graphics & g)
+{
+	{
+		int x = 380, y = 10, width = 172, height = 30;
+		String text(TRANS("RIFF MODE"));
+		Colour fillColour = Colour(0xfff2f2f2);
+		//[UserPaintCustomArguments] Customize the painting arguments here..
+		//[/UserPaintCustomArguments]
+		g.setColour(fillColour);
+		g.setFont(Font("8BIT WONDER Nominal", 18.00f, Font::plain).withTypefaceStyle("Regular"));
+		g.drawText(text, x, y, width, height,
+			Justification::centred, true);
+	}
+}
+
+void GuiWorkAudioProcessorEditor::LeadModeComponents::paint(Graphics & g)
+{
+	{
+		int x = 20, y = 20, width = 264, height = 50;
+		Colour strokeColour = Colour(0xdde2e2e2);
+		//[UserPaintCustomArguments] Customize the painting arguments here..
+		//[/UserPaintCustomArguments]
+		g.setColour(strokeColour);
+		g.drawRect(x, y, width, height, 3);
+		g.drawRect(x, y + 60, width, height, 3);
+		g.drawRect(x, y + 120, width, height-20, 3);
+	}
+	
+    {
+        int x = 380, y = 10, width = 172, height = 30;
+        String text (TRANS("LEAD MODE"));
+        Colour fillColour = Colour (0xfff2f2f2);
+        //[UserPaintCustomArguments] Customize the painting arguments here..
+        //[/UserPaintCustomArguments]
+        g.setColour (fillColour);
+        g.setFont (Font ("8BIT WONDER Nominal", 18.00f, Font::plain).withTypefaceStyle ("Regular"));
+        g.drawText (text, x, y, width, height,
+                    Justification::centred, true);	
+    }
+
 }
 
 void GuiWorkAudioProcessorEditor::LeadModeComponents::sliderValueChanged(Slider * slider)
@@ -133,10 +160,49 @@ void GuiWorkAudioProcessorEditor::LeadModeComponents::buttonClicked(Button * but
 
 }
 
-const char* GuiWorkAudioProcessorEditor::gidiBg_png = (const char*)resource_NewComponent_gidiBg_png;
+void GuiWorkAudioProcessorEditor::ChordModeComponent::sliderValueChanged(Slider * slider)
+{
+	if (slider->getName() == "chordWheel")
+	{
+		processingRef.setKeySig(slider->getValue());
+	}
+}
+
+void GuiWorkAudioProcessorEditor::ChordModeComponent::paint(Graphics & g)
+{
+	
+	{
+		int x = 230, y = 10, width = 176, height = 176;
+		
+		g.drawImage(chordWheelpng,
+			x, y, width, height,
+			0, 0, chordWheelpng.getWidth(), chordWheelpng.getHeight());
+	}
+	{
+		int x = 430, y = 10, width = 200, height = 30;
+		String text(TRANS("CHORD MODE"));
+		Colour fillColour = Colour(0xfff2f2f2);
+		
+		g.setColour(fillColour);
+		g.setFont(Font("8BIT WONDER Nominal", 18.00f, Font::plain).withTypefaceStyle("Regular"));
+		g.drawText(text, x, y, width, height,
+			Justification::centred, true);
+	}
+	{
+		int x = 6, y = 14, width = 210, height = 50;
+		Colour strokeColour = Colour(0xdde2e2e2);
+		
+		g.setColour(strokeColour);
+		g.drawRect(x, y, width, height, 3);
+		g.drawRect(x, y + 102, width, height, 3);
+		g.drawRect(x+220, y -8 , width+200, height +130, 3);
+	}
+
+	
+}
+
+
+const char* GuiWorkAudioProcessorEditor::gidiBg_png = (const char*)resource_NewComponent_gidiUi_jpg;
 const int GuiWorkAudioProcessorEditor::gidiBg_pngSize = 682305;
 
-
-const char* GuiWorkAudioProcessorEditor::riffmode_png = (const char*)resource_guicomponent_riffmode_png;
-const int GuiWorkAudioProcessorEditor::riffmode_pngSize = 620;
 

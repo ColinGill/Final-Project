@@ -27,20 +27,39 @@
 #pragma once
 
 #include "../JuceLibraryCode/JuceHeader.h"
+#include <math.h>       
+
 
 
 //==============================================================================
 /**
     As the name suggest, this class does the actual audio processing.
 */
-class JuceDemoPluginAudioProcessor  : public AudioProcessor
+class GidiPluginAudioProcessor : public AudioProcessor
 {
 public:
     //==============================================================================
-    JuceDemoPluginAudioProcessor();
-    ~JuceDemoPluginAudioProcessor();
+	GidiPluginAudioProcessor();
+    ~GidiPluginAudioProcessor();
 
     //==============================================================================
+	//Setters
+	void setGlobalDynamicsEnable(bool dEnable) { globalDynamics = dEnable; };
+	void setDynamics(int d) { dynamics = d; };
+	void setMode(uint8 m) { modeSelect = m; };
+	void setSensitivity(double s) { sensitivity = s; };
+	void setBendBtnState(bool b) { Ebends = b; };
+	void setKeySig(int k) { keySignature = k; };
+
+	//Getters
+	uint8 getMode() { return modeSelect; };
+	int getDynamics() { return dynamics; };
+	int getKeySig() { return keySignature; };
+	double getSensitivity() { return sensitivity; };
+	bool getBendBtnState() { return Ebends; }
+	bool getGlobalDynamicsState() { return globalDynamics; }
+
+
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -61,7 +80,7 @@ public:
 
     //==============================================================================
     bool hasEditor() const override                                             { return true; }
-    AudioProcessorEditor* createEditor() override;
+	AudioProcessorEditor* createEditor() override;
 
     //==============================================================================
     const String getName() const override                                       { return JucePlugin_Name; }
@@ -83,9 +102,9 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     //==============================================================================
-    void updateTrackProperties (const TrackProperties& properties) override;
+    //void updateTrackProperties (const TrackProperties& properties) override;
 
-	void updateGui(String);
+	//void updateGui(String);
 
     //==============================================================================
     // These properties are public so that our editor component can access them
@@ -114,30 +133,41 @@ public:
 
 private:
     //==============================================================================
+	AudioBuffer<float> delayBufferFloat;
+	AudioBuffer<double> delayBufferDouble;
+
+	static const int autoCorrLength = 1024;
+	const int numOfNotes = 49, dsf = 1;
+	bool Ebends = false, globalDynamics = false;
+
+	uint8 modeSelect = 0;
+	int guitarNoteArr[49], midiNoteArr[49];
+	const int intervals[7] = {0, 2,4,5,7,9,11 };
+	
+	float guitarNoteStart;
+	int delayPosition = 0;
+	uint8 currentNote = 0, lastNoteValue, currentThird = 0, lastThird;
+	int dynamics = 0.5, velocity, PitchWheelVal = 0, keySignature = 1, diminished = 0;
+	int time;
+	float rate, sensitivity = 0.86, error = 1;
+    int bufferSafe = 0;
+	SortedSet<int> notes;
+	Synthesiser synth;
+	
     template <typename FloatType>
     void process (AudioBuffer<FloatType>& buffer, MidiBuffer& midiMessages, AudioBuffer<FloatType>& delayBuffer);
+  
     template <typename FloatType>
-    void applyGain (AudioBuffer<FloatType>&, AudioBuffer<FloatType>& delayBuffer);
-    template <typename FloatType>
-    void applyDelay (AudioBuffer<FloatType>&, MidiBuffer& midi);
+    void processBuffer (AudioBuffer<FloatType>&, MidiBuffer& midi);
 
-    AudioBuffer<float> delayBufferFloat;
-    AudioBuffer<double> delayBufferDouble;
-	const int numOfNotes = 49, dsf =1 ;
-	int guitarNoteArr[49];
-	int midiNoteArr[49];
-	float guitarNoteStart;
-    int delayPosition = 0;
-	int currentNote, lastNoteValue;
-	int time;
-	float rate;
-	SortedSet<int> notes;
-    Synthesiser synth;
+	template <typename T>
+	bool mapToMidi(T , uint8 &);
 
+	void AutoCorr(float (&)[autoCorrLength], std::vector<float>&, const int  , int);
+	float getFundamental(std::vector<float>&);
 	
     void initialiseSynth();
-    void updateCurrentTimeInfoFromHost();
     static BusesProperties getBusesProperties();
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuceDemoPluginAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GidiPluginAudioProcessor)
 };
