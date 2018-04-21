@@ -28,7 +28,6 @@
 #include <math.h>  
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "SinewaveSynth.h"
 
 
 AudioProcessor* JUCE_CALLTYPE createPluginFilter();
@@ -268,14 +267,23 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 		*/
 		else if (modeSelect == 1 && bufferSafe == 0)
 		{
-			const float sensitivityLevel = (1.01 - getSensitivity(modeSelect))*0.1; //get sensitivity level from editor thread
+			const float sensitivityLevel = (1.01 - getSensitivity(modeSelect))*0.01; //get sensitivity level from editor thread
 			const int dynamicsLevel = 1000 - (getDynamics(modeSelect) * 100);
 
-			if (AbsAvgPower2 / 512 <= 0.0008)
+			
+			if (AbsAvgPower2 / 512 <= sensitivityLevel || AbsAvgPower1 / 512 <= sensitivityLevel)
 			{
-				midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
+				//midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
 				PitchWheelVal = 8192;
+
+				if (AbsAvgPower2 / 512 <= sensitivityLevel *0.1)
+				{
+					midi.addEvent(MidiMessage::noteOff(1, currentNote), 0);// send note Off msg 
+					lastNoteValue = 0;
+				}
+					
 			}
+			
 			else
 			{
 				//perform autoCorrelation and find fundamental pitch
@@ -323,7 +331,7 @@ void GidiPluginAudioProcessor::processBuffer (AudioBuffer<FloatType>& buffer, Mi
 					midi.addEvent(MidiMessage::pitchWheel(1, PitchWheelVal), 0);
 				}
 			}
-						}
+		}
 
 
 		}
@@ -451,7 +459,7 @@ void GidiPluginAudioProcessor::AutoCorr(float (& buffer)[autoCorrLength], std::v
 
 float GidiPluginAudioProcessor::getFundamental(std::vector<float>& autoCorrResult)
 {
-	float peak = 0, maxPeak = 0;
+	float peak = 0, maxPeak = 0 , fundamental =0;
 
 	for (int i = 2; i < autoCorrResult.size() - 1; i++)
 	{
@@ -465,8 +473,15 @@ float GidiPluginAudioProcessor::getFundamental(std::vector<float>& autoCorrResul
 			}
 		}
 	}
-
-	float fundamental = (getSampleRate() / dsf) / maxPeak;
+	if ((autoCorrResult.at(0) / peak) >= 3)
+	{
+		fundamental = 0;
+	}
+	else
+	{ 
+		fundamental = (getSampleRate() / dsf) / maxPeak;
+	}
+	
 	return fundamental;
 }
 

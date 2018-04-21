@@ -149,7 +149,8 @@ private:
 
 			dynamics.setText("DYNAMICS", NotificationType::dontSendNotification);
 			dynamics.setBounds(120, 80, 150, 32);
-			text.setBounds(310, 30, 300, 128);		
+			text.setBounds(310, 30, 300, 128);	
+			bendsBtn.setToggleState(processingRef.getBendBtnState(), dontSendNotification);
 			bendsBtn.setBounds(90, 140, 150, 32);
 		}
 
